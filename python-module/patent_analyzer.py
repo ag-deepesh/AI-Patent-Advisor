@@ -67,9 +67,9 @@ class PatentAnalyzer:
         return qa_chain
 
     def generate_response(self, query, context):
-        llm = ChatOpenAI(temperature=0.2, model_name="gpt-4o", max_tokens=256)
-        prompt_template = "Answer the query by using the context provided only.\
-        Do not add any additional information. If the context is not relevant enough then\
+        llm = ChatOpenAI(temperature=0.2, model_name="gpt-4o", max_tokens=512)
+        prompt_template = "Answer the query using the context provided only.\
+        Do not add any additional information. If the context and query are semantically dissimilar then\
         say Context not relevant enough. query: {query}\n context: {context}"
         prompt = PromptTemplate(template=prompt_template, input_variables=["query", "context"])
         return llm(prompt.format(query=query, context=context)).content
@@ -82,11 +82,15 @@ class PatentAnalyzer:
         source_metadata = ""
         for doc in source_documents:
             source = doc.metadata['source']
-            source_content_dict[source] = source_content_dict.get(source, "") + doc.page_content
+            if source not in source_content_dict:
+                source_content_dict[source] = ""
+            source_content_dict[source] += doc.page_content
+        
         for source, context in source_content_dict.items():
             summary = self.generate_response(query=generation_query, context=context)
             summarized_results += f"Source: {source}\n" + summary + "\n\n"
             source_metadata += f"Source: {source}\nExcerpt: {context}\n\n"
+        
         return summarized_results, source_metadata
 
     def get_retrieved_docs_metadata(self, result):
@@ -99,7 +103,7 @@ class PatentAnalyzer:
         return retrieved_docs_metadata
     
     def patent_summarization(self, patent_text, query):
-        llm = ChatOpenAI(temperature=0.2, model_name="gpt-4o", max_tokens=256)
+        llm = ChatOpenAI(temperature=0.2, model_name="gpt-4o", max_tokens=512)
     
         prompt_template = """{query}
         
@@ -111,7 +115,9 @@ class PatentAnalyzer:
         return response.content
     
     def prior_art_search(self, description):
-        return self.get_summarized_results(retrieval_query=description, generation_query=description)
+        generation_query = "Summarize the excerpts below if they the are semantically or technologically similar to the following invention: " + description
+
+        return self.get_summarized_results(retrieval_query=description, generation_query=generation_query)
     
     def competitive_monitoring(self, technology_area):
         generation_query = "Analyze the following text and provide: 1. Summary\n 2. Date of filing if available\n 3.Organization or company name if available."
